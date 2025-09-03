@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pypi": {
+      "command": "pypi-mcp",
+      "args": [],
+      "env": {
+        "PYPI_MCP_LOG_LEVEL": "INFO",
+        "PYPI_MCP_CACHE_TTL": "300"
+      }
+    }
+  }
+}

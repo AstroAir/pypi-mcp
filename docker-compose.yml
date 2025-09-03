@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  pypi-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # PyPI API settings
+      - PYPI_MCP_PYPI_BASE_URL=https://pypi.org
+      - PYPI_MCP_USER_AGENT=pypi-mcp/0.1.0
+      
+      # Performance settings
+      - PYPI_MCP_TIMEOUT=30.0
+      - PYPI_MCP_RATE_LIMIT=10.0
+      - PYPI_MCP_CACHE_TTL=300
+      - PYPI_MCP_CACHE_MAX_SIZE=1000
+      
+      # Logging
+      - PYPI_MCP_LOG_LEVEL=INFO
+      
+      # Feature flags
+      - PYPI_MCP_ENABLE_VULNERABILITY_CHECK=true
+      - PYPI_MCP_ENABLE_STATS=true
+      - PYPI_MCP_ENABLE_SEARCH=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for caching (if you want to add Redis caching in the future)
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   redis_data:

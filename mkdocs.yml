@@ -1,0 +1,180 @@
+site_name: PyPI MCP Server
+site_description: A comprehensive Model Context Protocol (MCP) server for PyPI package information and management
+site_author: PyPI MCP Contributors
+site_url: https://astroair.github.io/pypi-mcp/
+
+# Repository
+repo_name: AstroAir/pypi-mcp
+repo_url: https://github.com/AstroAir/pypi-mcp
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2025 Max Qian
+
+# Configuration
+theme:
+  name: material
+  language: en
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
+    - content.tooltips
+    - header.autohide
+    - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.prune
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+# Plugins
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+  - git-committers:
+      repository: AstroAir/pypi-mcp
+      branch: main
+
+# Customization
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AstroAir/pypi-mcp
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/pypi-mcp/
+  version:
+    provider: mike
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: AstroAir
+      repo: pypi-mcp
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Page tree
+nav:
+  - Home: index.md
+  - Getting Started:
+    - getting-started/installation.md
+    - getting-started/quick-start.md
+    - getting-started/integration.md
+  - User Guide:
+    - user-guide/configuration.md
+    - user-guide/usage-examples.md
+    - user-guide/transports.md
+    - user-guide/caching.md
+  - API Reference:
+    - api-reference/overview.md
+    - api-reference/tools.md
+    - api-reference/resources.md
+    - api-reference/prompts.md
+    - api-reference/data-models.md
+  - Developer Guide:
+    - developer-guide/development-setup.md
+    - developer-guide/architecture.md
+    - developer-guide/contributing.md
+    - developer-guide/testing.md
+    - developer-guide/release-process.md
+  - Troubleshooting:
+    - troubleshooting/common-issues.md
+    - troubleshooting/performance.md
+    - troubleshooting/debugging.md
+    - troubleshooting/faq.md
+  - About:
+    - about/changelog.md
+    - about/license.md
+    - about/acknowledgments.md
