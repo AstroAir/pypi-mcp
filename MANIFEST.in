@@ -1,0 +1,63 @@
+# Include the README and other documentation files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include SECURITY.md
+include DOCUMENTATION.md
+
+# Include configuration files
+include pyproject.toml
+include uv.lock
+include .env.example
+include .python-version
+
+# Include Docker and deployment files
+include Dockerfile
+include docker-compose.yml
+include Makefile
+
+# Include documentation
+recursive-include docs *
+include mkdocs.yml
+
+# Include examples
+recursive-include examples *
+
+# Include tests (for source distribution)
+recursive-include tests *
+include run_tests.py
+
+# Include GitHub workflows and configuration
+recursive-include .github *
+
+# Include VS Code configuration
+recursive-include .vscode *
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude *.so
+global-exclude .DS_Store
+
+# Exclude development and build artifacts
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .ruff_cache
+global-exclude htmlcov
+global-exclude .coverage
+global-exclude dist
+global-exclude build
+global-exclude *.egg-info
+
+# Exclude IDE files
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Exclude temporary files
+global-exclude .tmp
+global-exclude .temp

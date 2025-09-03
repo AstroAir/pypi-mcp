@@ -1060,7 +1060,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/30/23/2f0a3efc4d6a32f3b
 
 [[package]]
 name = "pypi-mcp"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cachetools" },

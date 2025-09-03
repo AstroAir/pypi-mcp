@@ -1,8 +1,9 @@
 [project]
 name = "pypi-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A comprehensive MCP server for PyPI package information and management"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=2.12.0",
@@ -12,18 +13,39 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 authors = [
-    {name = "PyPI MCP Contributors"}
+    { name = "PyPI MCP Contributors", email = "contributors@example.com" },
 ]
-keywords = ["mcp", "pypi", "package-manager", "python", "ai"]
+maintainers = [
+    { name = "PyPI MCP Contributors", email = "contributors@example.com" },
+]
+keywords = [
+    "mcp",
+    "pypi",
+    "package-manager",
+    "python",
+    "ai",
+    "model-context-protocol",
+    "package-information",
+    "dependency-analysis",
+    "vulnerability-scanning",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Software Distribution",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",
 ]
 
 [project.urls]
@@ -53,6 +75,9 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "pypi_mcp/__init__.py"
+
 [tool.uv]
 package = true
 
@@ -69,18 +94,18 @@ addopts = [
     "--strict-config",
     "--disable-warnings",
     "--color=yes",
-    "--durations=10"
+    "--durations=10",
 ]
 markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (may hit real APIs)",
     "performance: Performance and load tests",
     "slow: Slow tests that take more than a few seconds",
-    "network: Tests that require network access"
+    "network: Tests that require network access",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
     "ignore::UserWarning:httpx.*",
-    "ignore::UserWarning:pydantic.*"
+    "ignore::UserWarning:pydantic.*",
 ]

@@ -5,30 +5,35 @@ A comprehensive Model Context Protocol (MCP) server for PyPI package information
 ## Features
 
 ### 🔍 Package Discovery & Search
+
 - Search for packages by name or keywords
 - Get detailed package metadata and information
 - List all available versions of a package
 - Compare different versions of packages
 
 ### 📊 Dependency Analysis
+
 - Analyze package dependencies and requirements
 - Check Python version compatibility
 - Identify optional dependencies and extras
 - Dependency tree analysis
 
 ### 🔒 Security & Vulnerability Checking
+
 - Check for known security vulnerabilities
 - Get detailed CVE information
 - Security recommendations and mitigation advice
 - Package health assessment
 
 ### 📈 Statistics & Analytics
+
 - PyPI-wide statistics and top packages
 - Package download statistics (when available)
 - Package size and file information
 - Maintenance and activity metrics
 
 ### 🛠️ Advanced Features
+
 - Async/await support for high performance
 - Intelligent caching with TTL
 - Rate limiting and error handling
@@ -38,6 +43,7 @@ A comprehensive Model Context Protocol (MCP) server for PyPI package information
 ## Installation
 
 ### Using uv (recommended)
+
 ```bash
 git clone https://github.com/AstroAir/pypi-mcp.git
 cd pypi-mcp
@@ -45,6 +51,7 @@ uv sync
 ```
 
 ### Using pip
+
 ```bash
 git clone https://github.com/AstroAir/pypi-mcp.git
 cd pypi-mcp
@@ -54,6 +61,7 @@ pip install -e .
 ## Quick Start
 
 ### Running with STDIO (for local MCP clients)
+
 ```bash
 # Using the installed script
 pypi-mcp
@@ -63,6 +71,7 @@ python -m pypi_mcp.server
 ```
 
 ### Running with HTTP transport
+
 ```bash
 pypi-mcp --transport http --host 0.0.0.0 --port 8000
 ```
@@ -70,22 +79,27 @@ pypi-mcp --transport http --host 0.0.0.0 --port 8000
 ## Available Tools
 
 ### Package Information
+
 - `get_package_info(package_name, version?, include_files?)` - Get detailed package metadata
 - `get_package_versions(package_name, limit?, include_prereleases?)` - List package versions
 - `search_packages(query, limit?, include_description?)` - Search for packages
 
 ### Version Management
+
 - `compare_versions(package_name, version1, version2)` - Compare two package versions
 - `check_compatibility(package_name, version?, python_version?)` - Check Python compatibility
 
 ### Dependencies
+
 - `get_dependencies(package_name, version?, include_extras?)` - Analyze package dependencies
 
 ### Security
+
 - `check_vulnerabilities(package_name, version?)` - Check for security vulnerabilities
 - `get_package_health(package_name, version?)` - Assess package health and maintenance
 
 ### Statistics
+
 - `get_pypi_stats()` - Get PyPI-wide statistics
 - `get_cache_info()` - Get server cache information
 
@@ -181,6 +195,21 @@ uv run isort pypi_mcp/
 ```bash
 uv run mypy pypi_mcp/
 ```
+
+### Building and packaging
+
+```bash
+# Validate packaging configuration
+python scripts/packaging_utils.py
+
+# Build packages
+uv build
+
+# Validate built packages
+python scripts/validate_package.py
+```
+
+For detailed packaging information, see [docs/developer-guide/packaging.md](docs/developer-guide/packaging.md).
 
 ## Architecture
 

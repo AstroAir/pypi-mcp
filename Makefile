@@ -71,6 +71,21 @@ clean:
 build: clean
 	uv build
 
+# Packaging utilities
+validate-package: build
+	python scripts/validate_package.py
+
+check-packaging:
+	python scripts/packaging_utils.py
+
+# Build and validate package
+package: check-packaging build validate-package
+	@echo "Package build and validation complete!"
+
+# Test package installation in clean environment
+test-install: build
+	python scripts/validate_package.py
+
 # Documentation
 docs:
 	uv run mkdocs build

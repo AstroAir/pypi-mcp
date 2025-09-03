@@ -202,7 +202,8 @@ def create_server() -> FastMCP:
             List of matching packages with relevance scores
         """
         if not query.strip():
-            raise ValidationError("query", query, "Search query cannot be empty")
+            raise ValidationError(
+                "query", query, "Search query cannot be empty")
 
         if limit <= 0 or limit > 100:
             raise ValidationError(
@@ -271,10 +272,12 @@ def create_server() -> FastMCP:
             )
 
         if not validate_version(version1):
-            raise ValidationError("version1", version1, "Invalid version format")
+            raise ValidationError("version1", version1,
+                                  "Invalid version format")
 
         if not validate_version(version2):
-            raise ValidationError("version2", version2, "Invalid version format")
+            raise ValidationError("version2", version2,
+                                  "Invalid version format")
 
         async with client:
             try:
@@ -321,7 +324,8 @@ def create_server() -> FastMCP:
                 }
 
             except PackageNotFoundError as e:
-                raise PyPIMCPError(f"Package or version not found: {e.message}")
+                raise PyPIMCPError(
+                    f"Package or version not found: {e.message}")
 
     @mcp.tool
     async def check_compatibility(
@@ -543,7 +547,8 @@ def create_server() -> FastMCP:
 
                 # Format top packages
                 top_packages = []
-                for name, info in list(stats.top_packages.items())[:20]:  # Top 20
+                # Top 20
+                for name, info in list(stats.top_packages.items())[:20]:
                     top_packages.append(
                         {
                             "name": name,

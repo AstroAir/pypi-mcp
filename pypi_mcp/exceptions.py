@@ -24,7 +24,8 @@ class VersionNotFoundError(PyPIMCPError):
     """Raised when a specific version of a package is not found."""
 
     def __init__(self, package_name: str, version: str):
-        super().__init__(f"Version '{version}' of package '{package_name}' not found")
+        super().__init__(
+            f"Version '{version}' of package '{package_name}' not found")
         self.package_name = package_name
         self.version = version
 

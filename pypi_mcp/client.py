@@ -43,7 +43,8 @@ class PyPIClient:
     ) -> Dict:
         """Make an HTTP request with rate limiting and error handling."""
         if not self.session:
-            raise PyPIAPIError("Client not initialized. Use async context manager.")
+            raise PyPIAPIError(
+                "Client not initialized. Use async context manager.")
 
         async with self._rate_limiter:
             try:
@@ -53,7 +54,8 @@ class PyPIClient:
                     raise PackageNotFoundError("Resource not found")
                 elif response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
-                    raise RateLimitError(int(retry_after) if retry_after else None)
+                    raise RateLimitError(
+                        int(retry_after) if retry_after else None)
                 elif response.status_code >= 400:
                     raise PyPIAPIError(
                         f"HTTP {response.status_code}: {response.text}",

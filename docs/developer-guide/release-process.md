@@ -125,10 +125,10 @@ git pull origin main
 
 ### 2. Version Management
 
-- [ ] Version number updated in `pyproject.toml`
-- [ ] Version number updated in `__init__.py`
+- [ ] Version number updated in `__init__.py` (single source of truth)
 - [ ] CHANGELOG.md updated with new version
 - [ ] Migration guide written (if needed)
+- [ ] Version consistency validated: `python scripts/packaging_utils.py`
 
 ### 3. Testing
 
@@ -145,6 +145,15 @@ git pull origin main
 - [ ] Examples updated
 - [ ] README updated
 - [ ] Migration guide (for breaking changes)
+
+### 5. Packaging Validation
+
+- [ ] Package configuration validated: `python scripts/packaging_utils.py`
+- [ ] Package contents validated: `python scripts/validate_package.py`
+- [ ] Build process tested: `uv build`
+- [ ] Installation tested in clean environment
+- [ ] Entry points verified: `pypi-mcp --help`
+- [ ] Package metadata complete and accurate
 
 ## Release Process
 

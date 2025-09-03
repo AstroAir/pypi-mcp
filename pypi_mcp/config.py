@@ -37,7 +37,8 @@ class Settings(BaseSettings):
     )
 
     # Caching settings
-    cache_ttl: int = Field(default=300, description="Cache TTL in seconds", gt=0)
+    cache_ttl: int = Field(
+        default=300, description="Cache TTL in seconds", gt=0)
 
     cache_max_size: int = Field(
         default=1000, description="Maximum number of items in cache", gt=0
@@ -63,7 +64,8 @@ class Settings(BaseSettings):
         default=True, description="Enable vulnerability checking"
     )
 
-    enable_stats: bool = Field(default=True, description="Enable statistics endpoints")
+    enable_stats: bool = Field(
+        default=True, description="Enable statistics endpoints")
 
     enable_search: bool = Field(
         default=True, description="Enable package search functionality"
