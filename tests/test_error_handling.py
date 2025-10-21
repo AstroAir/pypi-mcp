@@ -208,9 +208,24 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_stats_api_failure_handling(self, server):
         """Test handling of PyPI stats API failures."""
-        # Skip this test for now as the real API is being called
-        # This would need proper mocking at the server level
-        pytest.skip("Mocking needs to be implemented at server level")
+        # Mock the server-level client to simulate stats API failure
+        with patch("pypi_mcp.server.client") as mock_client:
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_pypi_stats = AsyncMock(side_effect=Exception("Stats API down"))
+
+            async with Client(server) as client:
+                # Tool should return an error payload rather than raising
+                result = await client.call_tool("get_pypi_stats", {})
+                assert (getattr(result, "is_error", False)
+                        or (isinstance(result.data, dict) and "error" in result.data)
+                        or "error" in str(result.data))
+
+                # Resource should return a friendly fallback message
+                resource = await client.read_resource("pypi://stats/overview")
+                assert len(resource) == 1
+                content = resource[0].text
+                assert "PyPI statistics are currently unavailable." in content
 
 
 class TestValidationHelpers:
