@@ -233,7 +233,7 @@ def run_build_and_validate() -> Dict[str, Any]:
         }
 
 
-def main():
+def main() -> None:
     """Main function to run all packaging checks."""
     print("PyPI MCP Packaging Utilities")
     print("=" * 40)

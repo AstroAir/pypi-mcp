@@ -1,7 +1,7 @@
 """Main FastMCP server for PyPI package information."""
 
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
@@ -49,7 +49,7 @@ def create_server() -> FastMCP:
         package_name: str,
         version: Optional[str] = None,
         include_files: bool = False,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Get detailed information about a PyPI package.
 
@@ -133,7 +133,7 @@ def create_server() -> FastMCP:
         package_name: str,
         limit: Optional[int] = None,
         include_prereleases: bool = True,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Get all available versions of a package.
 
@@ -189,7 +189,7 @@ def create_server() -> FastMCP:
         query: str,
         limit: int = 10,
         include_description: bool = False,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Search for packages by name or keywords.
 
@@ -254,7 +254,7 @@ def create_server() -> FastMCP:
         package_name: str,
         version1: str,
         version2: str,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Compare two versions of a package.
 
@@ -332,7 +332,7 @@ def create_server() -> FastMCP:
         package_name: str,
         version: Optional[str] = None,
         python_version: str = "3.11",
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Check Python version compatibility for a package.
 
@@ -395,7 +395,7 @@ def create_server() -> FastMCP:
         package_name: str,
         version: Optional[str] = None,
         include_extras: bool = False,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Get package dependencies with detailed analysis.
 
@@ -422,9 +422,9 @@ def create_server() -> FastMCP:
                 dependencies = parse_requirements(package_info.requires_dist)
 
                 # Categorize dependencies
-                runtime_deps = []
-                dev_deps = []
-                optional_deps: Dict[str, List[str]] = {}
+                runtime_deps: List[Dict[str, Any]] = []
+                dev_deps: List[Dict[str, Any]] = []
+                optional_deps: Dict[str, List[Dict[str, Any]]] = {}
 
                 for dep in dependencies:
                     if dep.environment_marker:
@@ -469,7 +469,7 @@ def create_server() -> FastMCP:
     async def check_vulnerabilities(
         package_name: str,
         version: Optional[str] = None,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Check for known security vulnerabilities in a package.
 
@@ -534,7 +534,7 @@ def create_server() -> FastMCP:
                 raise PyPIMCPError(f"Package not found: {e.message}")
 
     @mcp.tool
-    async def get_pypi_stats() -> Dict:
+    async def get_pypi_stats() -> Dict[str, Any]:
         """
         Get overall PyPI statistics and top packages.
 
@@ -576,7 +576,7 @@ def create_server() -> FastMCP:
     async def get_package_health(
         package_name: str,
         version: Optional[str] = None,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
         Assess package health and maintenance status.
 
@@ -660,7 +660,7 @@ def create_server() -> FastMCP:
                 raise PyPIMCPError(f"Package not found: {e.message}")
 
     @mcp.tool
-    async def get_cache_info() -> Dict:
+    async def get_cache_info() -> Dict[str, Any]:
         """
         Get information about the server's cache status.
 
@@ -763,7 +763,7 @@ Use the vulnerability checking and package analysis tools to gather security-rel
     return mcp
 
 
-def main():
+def main() -> None:
     """Main entry point for the PyPI MCP server."""
     import argparse
 

@@ -1,7 +1,7 @@
 """Pydantic models for PyPI API responses and internal data structures."""
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -23,10 +23,10 @@ class PackageFile(BaseModel):
 
     @field_validator("sha256_digest", mode="before")
     @classmethod
-    def extract_sha256(cls, v):
+    def extract_sha256(cls, v: Any) -> str:
         if isinstance(v, dict):
-            return v.get("sha256", "")
-        return v
+            return v.get("sha256", "")  # type: ignore[no-any-return]
+        return v  # type: ignore[no-any-return]
 
 
 class Vulnerability(BaseModel):
@@ -43,7 +43,7 @@ class Vulnerability(BaseModel):
 
     @field_validator("summary", "details", mode="before")
     @classmethod
-    def handle_none_strings(cls, v):
+    def handle_none_strings(cls, v: Any) -> str:
         return v or ""
 
 
@@ -95,17 +95,17 @@ class PackageInfo(BaseModel):
         mode="before",
     )
     @classmethod
-    def handle_none_strings(cls, v):
+    def handle_none_strings(cls, v: Any) -> str:
         return v or ""
 
     @field_validator("provides_extra", "requires_dist", "classifiers", mode="before")
     @classmethod
-    def handle_none_lists(cls, v):
+    def handle_none_lists(cls, v: Any) -> List[str]:
         return v or []
 
     @field_validator("project_urls", mode="before")
     @classmethod
-    def handle_none_project_urls(cls, v):
+    def handle_none_project_urls(cls, v: Any) -> Dict[str, str]:
         return v or {}
 
 

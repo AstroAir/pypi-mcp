@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Optional, TypeVar
 
 from cachetools import TTLCache
 
@@ -18,8 +18,8 @@ T = TypeVar("T")
 class AsyncTTLCache:
     """Thread-safe async TTL cache implementation."""
 
-    def __init__(self, maxsize: int = 1000, ttl: int = 300):
-        self._cache = TTLCache(maxsize=maxsize, ttl=ttl)
+    def __init__(self, maxsize: int = 1000, ttl: int = 300) -> None:
+        self._cache: TTLCache[str, Any] = TTLCache(maxsize=maxsize, ttl=ttl)
         self._lock = asyncio.Lock()
 
     async def get(self, key: str) -> Optional[Any]:
@@ -52,18 +52,18 @@ class AsyncTTLCache:
 cache = AsyncTTLCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl)
 
 
-def cache_key(*args, **kwargs) -> str:
+def cache_key(*args: Any, **kwargs: Any) -> str:
     """Generate a cache key from arguments."""
     key_data = {"args": args, "kwargs": sorted(kwargs.items())}
     key_str = json.dumps(key_data, sort_keys=True, default=str)
     return hashlib.md5(key_str.encode()).hexdigest()
 
 
-def cached(ttl: Optional[int] = None):
+def cached(ttl: Optional[int] = None) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """Decorator for caching async function results."""
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        async def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
             # Generate cache key
             key = f"{func.__name__}:{cache_key(*args, **kwargs)}"
 
@@ -71,7 +71,7 @@ def cached(ttl: Optional[int] = None):
             cached_result = await cache.get(key)
             if cached_result is not None:
                 logger.debug(f"Cache hit for {key}")
-                return cached_result
+                return cached_result  # type: ignore[no-any-return]
 
             # Execute function and cache result
             logger.debug(f"Cache miss for {key}")
@@ -87,7 +87,7 @@ def cached(ttl: Optional[int] = None):
     return decorator
 
 
-async def get_cache_stats() -> dict:
+async def get_cache_stats() -> Dict[str, Any]:
     """Get cache statistics."""
     size = await cache.size()
     return {

@@ -32,7 +32,8 @@ class TestErrorHandling:
             async with Client(server) as client:
                 with pytest.raises(Exception) as exc_info:
                     await client.call_tool(
-                        "get_package_info", {"package_name": "nonexistent-package"}
+                        "get_package_info", {
+                            "package_name": "nonexistent-package"}
                     )
 
                 assert "Package not found" in str(exc_info.value)
@@ -64,7 +65,8 @@ class TestErrorHandling:
         async with Client(server) as client:
             with pytest.raises(Exception) as exc_info:
                 await client.call_tool(
-                    "get_package_info", {"package_name": ""}  # Empty package name
+                    # Empty package name
+                    "get_package_info", {"package_name": ""}
                 )
 
             assert "Invalid package name format" in str(exc_info.value)
@@ -139,13 +141,15 @@ class TestErrorHandling:
         """Test validation of search queries."""
         async with Client(server) as client:
             with pytest.raises(Exception) as exc_info:
-                await client.call_tool("search_packages", {"query": ""})  # Empty query
+                # Empty query
+                await client.call_tool("search_packages", {"query": ""})
 
             assert "Search query cannot be empty" in str(exc_info.value)
 
             with pytest.raises(Exception) as exc_info:
                 await client.call_tool(
-                    "search_packages", {"query": "test", "limit": 0}  # Invalid limit
+                    "search_packages", {"query": "test",
+                                        "limit": 0}  # Invalid limit
                 )
 
             assert "Limit must be between 1 and 100" in str(exc_info.value)

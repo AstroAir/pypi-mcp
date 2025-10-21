@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastmcp import Client
+from pydantic import HttpUrl
 
 from pypi_mcp.exceptions import PackageNotFoundError, ValidationError
 from pypi_mcp.models import PackageFile, PackageInfo, Vulnerability
@@ -45,16 +46,17 @@ def mock_package_info():
         requires_python=">=3.8",
         requires_dist=["requests>=2.25.0", "pydantic>=1.8.0"],
         provides_extra=["dev", "test"],
-        package_url="https://pypi.org/project/test-package/",
-        project_url="https://pypi.org/project/test-package/",
-        release_url="https://pypi.org/project/test-package/1.0.0/",
-        files=[
+        package_url=HttpUrl("https://pypi.org/project/test-package/"),
+        project_url=HttpUrl("https://pypi.org/project/test-package/"),
+        release_url=HttpUrl("https://pypi.org/project/test-package/1.0.0/"),
+        urls=[
             PackageFile(
                 filename="test_package-1.0.0-py3-none-any.whl",
-                url="https://files.pythonhosted.org/packages/test/test_package-1.0.0-py3-none-any.whl",
+                url=HttpUrl(
+                    "https://files.pythonhosted.org/packages/test/test_package-1.0.0-py3-none-any.whl"),
                 size=12345,
                 md5_digest="abc123",
-                digests={"sha256": "def456"},
+                digests="def456",
                 upload_time_iso_8601=datetime(2024, 1, 1, 12, 0, 0),
                 python_version="py3",
                 packagetype="bdist_wheel",
@@ -74,7 +76,7 @@ def mock_vulnerability():
         details="This is a test vulnerability for unit testing",
         aliases=["CVE-2024-001"],
         fixed_in=["1.0.1"],
-        link="https://example.com/vuln/001",
+        link=HttpUrl("https://example.com/vuln/001"),
     )
 
 
@@ -92,7 +94,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             # Use FastMCP Client for in-memory testing
             async with Client(server) as client:
@@ -117,7 +120,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_versions = AsyncMock(return_value=mock_versions)
+            mock_client.get_package_versions = AsyncMock(
+                return_value=mock_versions)
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -144,7 +148,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -161,8 +166,10 @@ class TestMCPToolsIntegration:
     async def test_compare_versions_tool(self, server, mock_package_info):
         """Test compare_versions tool."""
         # Create mock info for different versions
-        mock_info_v1 = mock_package_info.model_copy(update={"version": "1.0.0"})
-        mock_info_v2 = mock_package_info.model_copy(update={"version": "2.0.0"})
+        mock_info_v1 = mock_package_info.model_copy(
+            update={"version": "1.0.0"})
+        mock_info_v2 = mock_package_info.model_copy(
+            update={"version": "2.0.0"})
 
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -194,7 +201,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -213,7 +221,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -239,7 +248,8 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=vulnerable_package)
+            mock_client.get_package_info = AsyncMock(
+                return_value=vulnerable_package)
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -259,8 +269,10 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
-            mock_client.get_package_versions = AsyncMock(return_value=["1.0.0"])
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
+            mock_client.get_package_versions = AsyncMock(
+                return_value=["1.0.0"])
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -289,7 +301,8 @@ class TestMCPResources:
 
         mock_stats = PyPIStats(
             total_packages_size=1000000000,
-            top_packages={"requests": {"size": 50000000}, "numpy": {"size": 40000000}},
+            top_packages={"requests": {"size": 50000000},
+                          "numpy": {"size": 40000000}},
         )
 
         with patch("pypi_mcp.server.client") as mock_client:
@@ -313,7 +326,8 @@ class TestMCPResources:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             async with Client(server) as client:
                 resource = await client.read_resource("pypi://package/test-package")
@@ -341,34 +355,30 @@ class TestMCPPrompts:
         """Test analyze_package prompt."""
         async with Client(server) as client:
             prompt = await client.get_prompt(
-                "analyze_package", {"package_name": "test-package", "version": "1.0.0"}
+                "analyze_package", {
+                    "package_name": "test-package", "version": "1.0.0"}
             )
 
-            assert (
-                "analyze the PyPI package 'test-package' version 1.0.0"
-                in prompt.messages[0].content.text
-            )
-            assert (
-                "Package purpose and functionality" in prompt.messages[0].content.text
-            )
-            assert "Security considerations" in prompt.messages[0].content.text
-            assert "Use the available PyPI tools" in prompt.messages[0].content.text
+            content_text = prompt.messages[0].content.text
+            assert "analyze the PyPI package 'test-package' version 1.0.0" in content_text
+            assert "Package purpose and functionality" in content_text
+            assert "Security considerations" in content_text
+            assert "Use the available PyPI tools" in content_text
 
     @pytest.mark.asyncio
     async def test_compare_packages_prompt(self, server):
         """Test compare_packages prompt."""
         async with Client(server) as client:
             prompt = await client.get_prompt(
-                "compare_packages", {"package1": "fastapi", "package2": "flask"}
+                "compare_packages", {
+                    "package1": "fastapi", "package2": "flask"}
             )
 
-            assert (
-                "compare the PyPI packages 'fastapi' and 'flask'"
-                in prompt.messages[0].content.text
-            )
-            assert "Functionality and feature sets" in prompt.messages[0].content.text
-            assert "Community adoption" in prompt.messages[0].content.text
-            assert "Use the PyPI tools" in prompt.messages[0].content.text
+            content_text = prompt.messages[0].content.text
+            assert "compare the PyPI packages 'fastapi' and 'flask'" in content_text
+            assert "Functionality and feature sets" in content_text
+            assert "Community adoption" in content_text
+            assert "Use the PyPI tools" in content_text
 
     @pytest.mark.asyncio
     async def test_security_review_prompt(self, server):
@@ -378,12 +388,10 @@ class TestMCPPrompts:
                 "security_review", {"package_name": "django"}
             )
 
-            assert (
-                "security review of the PyPI package 'django'"
-                in prompt.messages[0].content.text
-            )
-            assert "Known vulnerabilities and CVEs" in prompt.messages[0].content.text
-            assert "vulnerability checking" in prompt.messages[0].content.text
+            content_text = prompt.messages[0].content.text
+            assert "security review of the PyPI package 'django'" in content_text
+            assert "Known vulnerabilities and CVEs" in content_text
+            assert "vulnerability checking" in content_text
 
 
 # ============================================================================

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 import httpx
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 class PyPIClient:
     """Async client for PyPI API."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.session: Optional[httpx.AsyncClient] = None
         self._rate_limiter = asyncio.Semaphore(int(settings.rate_limit))
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "PyPIClient":
         """Async context manager entry."""
         self.session = httpx.AsyncClient(
             timeout=settings.timeout,
@@ -33,14 +33,14 @@ class PyPIClient:
         )
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         if self.session:
             await self.session.aclose()
 
     async def _make_request(
         self, url: str, headers: Optional[Dict[str, str]] = None
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """Make an HTTP request with rate limiting and error handling."""
         if not self.session:
             raise PyPIAPIError(
@@ -62,7 +62,7 @@ class PyPIClient:
                         response.status_code,
                     )
 
-                return response.json()
+                return response.json()  # type: ignore[no-any-return]
 
             except httpx.RequestError as e:
                 raise PyPIAPIError(f"Request failed: {str(e)}")

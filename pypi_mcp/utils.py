@@ -127,7 +127,7 @@ def calculate_similarity(text1: str, text2: str) -> float:
     return len(intersection) / len(union) if union else 0.0
 
 
-def extract_keywords(text: str) -> List[str]:
+def extract_keywords(text: Optional[str]) -> List[str]:
     """Extract keywords from text."""
     if not text:
         return []

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastmcp import Client
+from pydantic import HttpUrl
 
 from pypi_mcp.server import create_server
 
@@ -42,7 +43,8 @@ class TestRealPyPIIntegration:
         """Test retrieving real package versions from PyPI."""
         async with Client(server) as client:
             result = await client.call_tool(
-                "get_package_versions", {"package_name": "requests", "limit": 5}
+                "get_package_versions", {
+                    "package_name": "requests", "limit": 5}
             )
 
             assert result.data["package_name"] == "requests"
@@ -61,7 +63,8 @@ class TestRealPyPIIntegration:
             assert result.data["query"] == "requests"
             assert result.data["total_results"] >= 1
             # Should find the requests package as exact match
-            assert any(pkg["name"] == "requests" for pkg in result.data["results"])
+            assert any(pkg["name"] ==
+                       "requests" for pkg in result.data["results"])
 
     @pytest.mark.asyncio
     async def test_real_pypi_stats(self, server):
@@ -149,7 +152,8 @@ class TestEndToEndWorkflows:
 
             # Step 2: Get all versions
             versions_result = await client.call_tool(
-                "get_package_versions", {"package_name": package_name, "limit": 10}
+                "get_package_versions", {
+                    "package_name": package_name, "limit": 10}
             )
 
             assert len(versions_result.data["versions"]) <= 10
@@ -205,7 +209,8 @@ class TestEndToEndWorkflows:
                 {
                     "package_name": package1,
                     "version1": info1.data["version"],
-                    "version2": info1.data["version"],  # Same version should be equal
+                    # Same version should be equal
+                    "version2": info1.data["version"],
                 },
             )
 
@@ -221,9 +226,7 @@ class TestEndToEndWorkflows:
             resource = await client.read_resource(f"pypi://package/{package_name}")
 
             assert len(resource) == 1
-            content = (
-                resource[0].text if hasattr(resource[0], "text") else str(resource[0])
-            )
+            content = resource[0].text
             assert (
                 f"Package: {package_name}" in content
                 or f"Package: {package_name.capitalize()}" in content
@@ -279,10 +282,11 @@ class TestMockIntegration:
                 requires_python=">=3.8",
                 requires_dist=["requests>=2.25.0"],
                 provides_extra=[],
-                package_url="https://pypi.org/project/test-package/",
-                project_url="https://pypi.org/project/test-package/",
-                release_url="https://pypi.org/project/test-package/1.0.0/",
-                files=[],
+                package_url=HttpUrl("https://pypi.org/project/test-package/"),
+                project_url=HttpUrl("https://pypi.org/project/test-package/"),
+                release_url=HttpUrl(
+                    "https://pypi.org/project/test-package/1.0.0/"),
+                urls=[],
                 vulnerabilities=[],
             )
 

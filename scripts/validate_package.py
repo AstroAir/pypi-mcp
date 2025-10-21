@@ -17,7 +17,7 @@ from typing import List, Set, Dict, Any, Optional
 import json
 
 
-def run_command(cmd: List[str], cwd: Optional[str] = None) -> subprocess.CompletedProcess:
+def run_command(cmd: List[str], cwd: Optional[str] = None) -> subprocess.CompletedProcess[str]:
     """Run a command and return the result."""
     try:
         result = subprocess.run(
@@ -171,7 +171,7 @@ def test_package_installation(wheel_path: Path) -> Dict[str, Any]:
             }
 
 
-def main():
+def main() -> None:
     """Main validation function."""
     print("PyPI MCP Package Validation")
     print("=" * 40)

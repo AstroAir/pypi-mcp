@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastmcp import Client
+from pydantic import HttpUrl
 
 from pypi_mcp.cache import cache
 from pypi_mcp.models import PackageInfo
@@ -35,10 +36,10 @@ def mock_package_info():
         requires_python=">=3.8",
         requires_dist=["requests>=2.25.0"],
         provides_extra=["dev"],
-        package_url="https://pypi.org/project/test-package/",
-        project_url="https://pypi.org/project/test-package/",
-        release_url="https://pypi.org/project/test-package/1.0.0/",
-        files=[],
+        package_url=HttpUrl("https://pypi.org/project/test-package/"),
+        project_url=HttpUrl("https://pypi.org/project/test-package/"),
+        release_url=HttpUrl("https://pypi.org/project/test-package/1.0.0/"),
+        urls=[],
         vulnerabilities=[],
     )
 
@@ -142,14 +143,16 @@ class TestConcurrentRequests:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(side_effect=mock_get_package_info)
+            mock_client.get_package_info = AsyncMock(
+                side_effect=mock_get_package_info)
 
             async with Client(server) as client:
                 # Make multiple concurrent requests for different packages
                 tasks = []
                 for i in range(5):
                     task = client.call_tool(
-                        "get_package_info", {"package_name": f"test-package-{i}"}
+                        "get_package_info", {
+                            "package_name": f"test-package-{i}"}
                     )
                     tasks.append(task)
 
@@ -179,7 +182,8 @@ class TestConcurrentRequests:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(side_effect=mock_get_package_info)
+            mock_client.get_package_info = AsyncMock(
+                side_effect=mock_get_package_info)
 
             async with Client(server) as client:
                 # Make multiple concurrent requests for the same package
@@ -222,13 +226,15 @@ class TestRateLimiting:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(
+                return_value=mock_package_info)
 
             async with Client(server) as client:
                 # Make several sequential requests
                 for i in range(3):
                     result = await client.call_tool(
-                        "get_package_info", {"package_name": f"test-package-{i}"}
+                        "get_package_info", {
+                            "package_name": f"test-package-{i}"}
                     )
                     assert result.data["name"] == "test-package"
 
