@@ -7,7 +7,8 @@ import pytest
 from fastmcp import Client
 from pydantic import HttpUrl
 
-from pypi_mcp.cache import cache
+from pypi_mcp.cache import AsyncTTLCache, cache
+from pypi_mcp.config import settings
 from pypi_mcp.models import PackageInfo
 from pypi_mcp.server import create_server
 
@@ -100,7 +101,15 @@ class TestCachingBehavior:
             assert "cache_enabled" in result.data
             assert "cache_ttl_seconds" in result.data
             assert result.data["cache_enabled"] is True
-            assert isinstance(result.data["cache_ttl_seconds"], int)
+            assert "cache_hit_rate" in result.data
+
+            stats = result.data["cache_stats"]
+            assert stats["default_ttl"] == settings.cache_ttl
+            assert "hits" in stats
+            assert "misses" in stats
+            assert "evictions" in stats
+            assert "expired" in stats
+            assert "size" in stats
 
     @pytest.mark.asyncio
     async def test_cache_cleanup(self):
@@ -248,8 +257,6 @@ class TestMemoryUsage:
     @pytest.mark.asyncio
     async def test_cache_size_limits(self):
         """Test that cache respects size limits."""
-        from pypi_mcp.cache import AsyncTTLCache
-
         # Create a small cache for testing
         test_cache = AsyncTTLCache(maxsize=5, ttl=300)
 
@@ -260,6 +267,35 @@ class TestMemoryUsage:
         # Cache size should not exceed the limit
         current_size = await test_cache.size()
         assert current_size <= 5
+
+    @pytest.mark.asyncio
+    async def test_cache_entry_expiration(self):
+        """Ensure cache entries honour per-item TTL."""
+        test_cache = AsyncTTLCache(maxsize=5, ttl=1.0)
+
+        await test_cache.set("temporary", "value", ttl=0.1)
+        assert await test_cache.get("temporary") == "value"
+
+        await asyncio.sleep(0.2)
+        assert await test_cache.get("temporary") is None
+
+        stats = await test_cache.stats()
+        assert stats["expired"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_cache_stats_tracking(self):
+        """Validate cache hit/miss counters are reported."""
+        test_cache = AsyncTTLCache(maxsize=5, ttl=60)
+
+        # Miss for empty cache
+        assert await test_cache.get("missing") is None
+
+        await test_cache.set("key", "value")
+        assert await test_cache.get("key") == "value"
+
+        stats = await test_cache.stats()
+        assert stats["hits"] >= 1
+        assert stats["misses"] >= 1
 
     @pytest.mark.asyncio
     async def test_resource_cleanup(self, server):

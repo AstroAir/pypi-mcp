@@ -28,9 +28,10 @@ Model Context Protocol (MCP) is a standard for connecting AI models to external 
 
 - **🔍 Package Discovery**: Search packages by name or keywords with intelligent matching
 - **📊 Dependency Analysis**: Comprehensive dependency tree analysis with environment markers
-- **🔒 Security Scanning**: Real-time vulnerability checking with CVE integration
-- **📈 Statistics & Analytics**: PyPI-wide statistics and package metrics
-- **⚡ High Performance**: Async/await architecture with intelligent caching (TTL-based)
+- **🔒 Security Scanning**: Real-time vulnerability checking with severity heuristics, CVE awareness, and actionable remediation guidance
+- **🩺 Health & Maintenance Insights**: Multi-signal health scoring that evaluates metadata quality, release cadence, vulnerability impact, and yanked status
+- **📈 Statistics & Analytics**: PyPI-wide metrics plus package-level release activity and cadence classification
+- **⚡ High Performance**: Async/await architecture with adaptive rate limiting and an asynchronous TTL cache with hit/miss tracking
 - **🛠️ Multiple Transports**: Support for both STDIO and HTTP transports
 - **📝 Rich Metadata**: Detailed package information including files, classifiers, and project URLs
 
@@ -42,7 +43,7 @@ The server is built using modern Python technologies:
 - **httpx**: Async HTTP client for PyPI API interactions
 - **Pydantic**: Data validation and serialization with type safety
 - **packaging**: Python package version handling and requirement parsing
-- **cachetools**: Intelligent caching system with TTL support
+- **AsyncTTLCache**: Custom asynchronous caching system with per-item TTL, LRU eviction, and detailed statistics
 
 ### Core Components
 
@@ -231,7 +232,7 @@ Available command-line options:
 
 ## API Reference
 
-The PyPI MCP server provides 10 tools, 2 resources, and 3 prompts for comprehensive PyPI package management.
+The PyPI MCP server provides 11 tools, 2 resources, and 3 prompts for comprehensive PyPI package management.
 
 ### Tools
 
@@ -478,7 +479,13 @@ Check for known security vulnerabilities in a package.
     }
   ],
   "security_status": "vulnerable",
-  "recommendation": "Update to a patched version"
+  "severity_breakdown": {
+    "critical": 1,
+    "high": 1
+  },
+  "overall_severity": "critical",
+  "overall_severity_score": 92,
+  "recommendation": "Address the listed vulnerabilities"
 }
 ```
 
@@ -529,7 +536,43 @@ Assess package health and maintenance status.
 }
 ```
 
-#### 10. get_cache_info
+#### 10. get_release_activity
+
+Analyze release cadence and activity for a package.
+
+**Parameters:**
+- `package_name` (str, required): Name of the package
+- `limit` (int, optional): Maximum number of releases to analyze (default: 50, max: 200)
+- `window_days` (int, optional): Rolling window (in days) for recent activity metrics (default: 365)
+
+**Returns:**
+```json
+{
+  "package_name": "fastapi",
+  "total_releases": 25,
+  "recent_releases": 5,
+  "window_days": 180,
+  "first_release": "2018-12-25T18:00:00+00:00",
+  "latest_release": "2024-08-10T10:45:12+00:00",
+  "release_cadence_days": 32.4,
+  "cadence_classification": "regular",
+  "releases": [
+    {
+      "version": "0.110.0",
+      "uploaded_at": "2024-08-10T10:45:12+00:00",
+      "filename": "fastapi-0.110.0-py3-none-any.whl",
+      "python_version": "py3",
+      "packagetype": "bdist_wheel",
+      "size": 453102,
+      "yanked": false,
+      "file_count": 2,
+      "package_types": ["bdist_wheel", "sdist"]
+    }
+  ]
+}
+```
+
+#### 11. get_cache_info
 
 Get information about the server's cache status.
 
@@ -626,6 +669,9 @@ if vuln_check["has_vulnerabilities"]:
         print(f"- {vuln['id']}: {vuln['summary']}")
         if vuln["fixed_in"]:
             print(f"  Fixed in: {', '.join(vuln['fixed_in'])}")
+        print(f"  Severity: {vuln['severity']} (score {vuln['severity_score']})")
+if vuln_check["overall_severity"]:
+    print(f"Overall severity: {vuln_check['overall_severity']} (score {vuln_check['overall_severity_score']})")
 else:
     print("✅ No known vulnerabilities")
 ```
@@ -654,6 +700,12 @@ print(f"Newer version: {newer}")
 # Get package health assessment
 health = await get_package_health("requests")
 print(f"Health status: {health['health_status']} (score: {health['health_score']})")
+print("Notes:")
+for note in health["health_notes"]:
+    print(f"- {note}")
+print("Breakdown:")
+for metric, delta in health["scoring_breakdown"].items():
+    print(f"  {metric}: {delta}")
 ```
 
 ### Search and Discovery
@@ -667,6 +719,18 @@ for result in search_results["results"]:
 # Get PyPI statistics
 stats = await get_pypi_stats()
 print(f"Total PyPI size: {stats['total_size_formatted']}")
+```
+
+### Release Cadence Analysis
+
+```python
+# Understand release activity for a package
+activity = await get_release_activity("fastapi", window_days=180)
+print(f"Releases analysed: {activity['total_releases']}")
+print(f"Recent releases (last {activity['window_days']} days): {activity['recent_releases']}")
+print(f"Cadence classification: {activity['cadence_classification']}")
+for release in activity["releases"][:3]:
+    print(f"- {release['version']} @ {release['uploaded_at']} ({', '.join(release['package_types'])})")
 ```
 
 ### Integration with Claude Desktop

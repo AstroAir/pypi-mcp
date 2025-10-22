@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -12,7 +13,7 @@ from .cache import cached
 from .config import settings
 from .exceptions import (PackageNotFoundError, PyPIAPIError, RateLimitError,
                          VersionNotFoundError)
-from .models import PackageInfo, PyPIStats
+from .models import PackageInfo, PyPIStats, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,9 @@ class PyPIClient:
     def __init__(self) -> None:
         self.session: Optional[httpx.AsyncClient] = None
         self._rate_limiter = asyncio.Semaphore(int(settings.rate_limit))
+        self._rate_lock = asyncio.Lock()
+        self._last_request = 0.0
+        self._rate_interval = 1.0 / settings.rate_limit if settings.rate_limit > 0 else 0.0
 
     async def __aenter__(self) -> "PyPIClient":
         """Async context manager entry."""
@@ -39,7 +43,10 @@ class PyPIClient:
             await self.session.aclose()
 
     async def _make_request(
-        self, url: str, headers: Optional[Dict[str, str]] = None
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Make an HTTP request with rate limiting and error handling."""
         if not self.session:
@@ -47,8 +54,11 @@ class PyPIClient:
                 "Client not initialized. Use async context manager.")
 
         async with self._rate_limiter:
+            await self._enforce_rate_limit()
             try:
-                response = await self.session.get(url, headers=headers or {})
+                response = await self.session.get(
+                    url, headers=headers or {}, params=params or {}
+                )
 
                 if response.status_code == 404:
                     raise PackageNotFoundError("Resource not found")
@@ -66,6 +76,19 @@ class PyPIClient:
 
             except httpx.RequestError as e:
                 raise PyPIAPIError(f"Request failed: {str(e)}")
+
+    async def _enforce_rate_limit(self) -> None:
+        """Ensure requests adhere to configured rate limit."""
+        if self._rate_interval <= 0:
+            return
+
+        async with self._rate_lock:
+            now = time.monotonic()
+            wait_time = (self._last_request + self._rate_interval) - now
+            if wait_time > 0:
+                await asyncio.sleep(wait_time)
+                now = time.monotonic()
+            self._last_request = now
 
     @cached(ttl=300)
     async def get_package_info(
@@ -153,6 +176,64 @@ class PyPIClient:
         except PackageNotFoundError:
             raise PackageNotFoundError(package_name)
 
+    @cached(ttl=600)
+    async def get_release_history(
+        self, package_name: str, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get detailed release history including upload timestamps."""
+        package_name = package_name.lower().replace("_", "-")
+        url = f"{settings.pypi_base_url}/pypi/{quote(package_name)}/json"
+
+        try:
+            data = await self._make_request(url)
+        except PackageNotFoundError:
+            raise PackageNotFoundError(package_name)
+
+        releases = data.get("releases", {})
+        history: List[Dict[str, Any]] = []
+
+        for version, files in releases.items():
+            if not files:
+                continue
+
+            # Only consider files that have upload timestamps
+            dated_files = [
+                file
+                for file in files
+                if file.get("upload_time_iso_8601")
+            ]
+
+            if not dated_files:
+                continue
+
+            latest_file = max(
+                dated_files,
+                key=lambda f: f["upload_time_iso_8601"],
+            )
+
+            upload_time = latest_file.get("upload_time_iso_8601")
+            history.append(
+                {
+                    "version": version,
+                    "uploaded_at": upload_time,
+                    "filename": latest_file.get("filename"),
+                    "python_version": latest_file.get("python_version"),
+                    "packagetype": latest_file.get("packagetype"),
+                    "size": latest_file.get("size"),
+                    "yanked": any(file.get("yanked") for file in files),
+                    "file_count": len(files),
+                    "package_types": sorted(
+                        {file.get("packagetype") for file in files if file.get("packagetype")}
+                    ),
+                }
+            )
+
+        history.sort(key=lambda item: item["uploaded_at"], reverse=True)
+
+        if limit is not None:
+            return history[:limit]
+        return history
+
     @cached(ttl=3600)
     async def get_pypi_stats(self) -> PyPIStats:
         """Get PyPI statistics."""
@@ -169,6 +250,43 @@ class PyPIClient:
             logger.warning(f"Failed to get PyPI stats: {e}")
             # Return empty stats if API fails
             return PyPIStats(total_packages_size=0, top_packages={})
+
+    @cached(ttl=300)
+    async def search_packages(self, query: str, limit: int) -> List[SearchResult]:
+        """Search packages on PyPI using the JSON search endpoint."""
+        params = {"q": query, "format": "json"}
+        url = f"{settings.pypi_base_url}/search/"
+
+        try:
+            data = await self._make_request(
+                url,
+                headers={"Accept": "application/json"},
+                params=params,
+            )
+        except PyPIAPIError as exc:
+            raise PyPIAPIError(f"Search failed: {exc.message}") from exc
+
+        projects = data.get("projects", []) if isinstance(data, dict) else []
+        results: List[SearchResult] = []
+
+        for project in projects[:limit]:
+            try:
+                results.append(
+                    SearchResult(
+                        name=project.get("name", ""),
+                        version=project.get("version", ""),
+                        summary=project.get("description", ""),
+                        description=project.get("description", ""),
+                        author=project.get("author", ""),
+                        keywords=project.get("keywords", []) or [],
+                        classifiers=project.get("classifiers", []) or [],
+                        score=float(project.get("score", 0.0) or 0.0),
+                    )
+                )
+            except Exception:
+                continue
+
+        return results
 
 
 # Global client instance

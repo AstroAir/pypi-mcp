@@ -1,6 +1,8 @@
 """Main FastMCP server for PyPI package information."""
 
 import logging
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
@@ -8,7 +10,7 @@ from fastmcp import FastMCP
 from .cache import get_cache_stats
 from .client import client
 from .config import settings
-from .exceptions import PackageNotFoundError, PyPIMCPError, ValidationError
+from .exceptions import (PackageNotFoundError, PyPIMCPError, ValidationError)
 from .utils import classify_version_type
 from .utils import compare_versions as compare_version_strings
 from .utils import (extract_keywords, format_file_size,
@@ -184,6 +186,113 @@ def create_server() -> FastMCP:
             except PackageNotFoundError as e:
                 raise PyPIMCPError(f"Package not found: {e.message}")
 
+    def _parse_iso_datetime(value: str) -> datetime:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    @mcp.tool
+    async def get_release_activity(
+        package_name: str,
+        limit: int = 50,
+        window_days: int = 365,
+    ) -> Dict[str, Any]:
+        """Analyze release activity and provide cadence metrics."""
+
+        if not validate_package_name(package_name):
+            raise ValidationError(
+                "package_name", package_name, "Invalid package name format"
+            )
+
+        if not 1 <= limit <= 200:
+            raise ValidationError("limit", str(limit), "Limit must be between 1 and 200")
+
+        if not 1 <= window_days <= 1825:
+            raise ValidationError(
+                "window_days",
+                str(window_days),
+                "Window must be between 1 and 1825 days",
+            )
+
+        async with client:
+            try:
+                history = await client.get_release_history(package_name, limit=limit)
+            except PackageNotFoundError as exc:
+                raise PyPIMCPError(f"Package not found: {exc.message}")
+
+        if not history:
+            return {
+                "package_name": package_name,
+                "total_releases": 0,
+                "recent_releases": 0,
+                "window_days": window_days,
+                "first_release": None,
+                "latest_release": None,
+                "release_cadence_days": None,
+                "cadence_classification": "none",
+                "releases": [],
+            }
+
+        parsed_history = []
+        for entry in history:
+            uploaded_at = entry.get("uploaded_at")
+            if not uploaded_at:
+                continue
+            parsed_time = _parse_iso_datetime(uploaded_at)
+            parsed_history.append({**entry, "uploaded_at": parsed_time})
+
+        parsed_history.sort(key=lambda item: item["uploaded_at"], reverse=True)
+
+        now = datetime.now(timezone.utc)
+        window_start = now - timedelta(days=window_days)
+
+        recent_releases = [
+            entry for entry in parsed_history if entry["uploaded_at"] >= window_start
+        ]
+
+        intervals: List[int] = []
+        for idx in range(len(parsed_history) - 1):
+            delta = (
+                parsed_history[idx]["uploaded_at"]
+                - parsed_history[idx + 1]["uploaded_at"]
+            )
+            intervals.append(max(delta.days, 0))
+
+        average_interval = sum(intervals) / len(intervals) if intervals else None
+
+        if average_interval is None:
+            cadence = "insufficient-data"
+        elif average_interval <= 30:
+            cadence = "fast"
+        elif average_interval <= 90:
+            cadence = "regular"
+        elif average_interval <= 180:
+            cadence = "slow"
+        else:
+            cadence = "stalled"
+
+        def serialize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                **entry,
+                "uploaded_at": entry["uploaded_at"].isoformat(),
+            }
+
+        oldest = parsed_history[-1]["uploaded_at"]
+        newest = parsed_history[0]["uploaded_at"]
+
+        return {
+            "package_name": package_name,
+            "total_releases": len(parsed_history),
+            "recent_releases": len(recent_releases),
+            "window_days": window_days,
+            "first_release": oldest.isoformat(),
+            "latest_release": newest.isoformat(),
+            "release_cadence_days": average_interval,
+            "cadence_classification": cadence,
+            "releases": [serialize_entry(entry) for entry in parsed_history],
+        }
+
     @mcp.tool
     async def search_packages(
         query: str,
@@ -210,16 +319,50 @@ def create_server() -> FastMCP:
                 "limit", str(limit), "Limit must be between 1 and 100"
             )
 
-        # Simple search implementation - in a real implementation,
-        # you might want to use a proper search index or PyPI's search API
-        results = []
+        results: List[Dict[str, Any]] = []
+        normalized_query = query.lower().strip()
 
-        # Try exact match first
-        if validate_package_name(query):
-            async with client:
+        async with client:
+            # Primary search via PyPI JSON endpoint
+            try:
+                search_results = await client.search_packages(query, limit)
+            except PyPIMCPError as exc:  # pragma: no cover - defensive
+                logger.warning("Search request failed: %s", exc)
+                search_results = []
+
+            for search_result in search_results[:limit]:
+                description = (
+                    search_result.description[:200] + "..."
+                    if include_description and len(search_result.description) > 200
+                    else ""
+                )
+
+                results.append(
+                    {
+                        "name": search_result.name,
+                        "version": search_result.version,
+                        "summary": search_result.summary,
+                        "description": description,
+                        "author": search_result.author,
+                        "keywords": extract_keywords(
+                            ",".join(search_result.keywords)
+                            if isinstance(search_result.keywords, list)
+                            else search_result.keywords
+                        ),
+                        "score": search_result.score,
+                    }
+                )
+
+            # Ensure exact match is present even if search omitted it
+            has_exact_match = any(
+                result["name"].lower() == normalized_query for result in results
+            )
+
+            if validate_package_name(query) and not has_exact_match:
                 try:
                     package_info = await client.get_package_info(query)
-                    results.append(
+                    results.insert(
+                        0,
                         {
                             "name": package_info.name,
                             "version": package_info.version,
@@ -233,15 +376,10 @@ def create_server() -> FastMCP:
                             "author": package_info.author,
                             "keywords": extract_keywords(package_info.keywords),
                             "score": 1.0,
-                        }
+                        },
                     )
                 except PackageNotFoundError:
                     pass
-
-        # For a more comprehensive search, you would need to:
-        # 1. Use PyPI's search API (if available)
-        # 2. Maintain a local index of packages
-        # 3. Use external search services
 
         return {
             "query": query,
@@ -492,8 +630,54 @@ def create_server() -> FastMCP:
             try:
                 package_info = await client.get_package_info(package_name, version)
 
-                vulnerabilities = []
+                vulnerabilities: List[Dict[str, Any]] = []
+                severity_counts: Counter[str] = Counter()
+                highest_score = 0
+
+                def classify_severity(score: int) -> str:
+                    if score >= 85:
+                        return "critical"
+                    if score >= 70:
+                        return "high"
+                    if score >= 50:
+                        return "medium"
+                    if score >= 35:
+                        return "low"
+                    return "info"
+
                 for vuln in package_info.vulnerabilities:
+                    summary_text = f"{vuln.summary} {vuln.details}".lower()
+                    base_score = 40
+
+                    if any(alias.startswith("CVE-") for alias in vuln.aliases):
+                        base_score = max(base_score, 75)
+
+                    keyword_scores = {
+                        "critical": 90,
+                        "high": 75,
+                        "medium": 55,
+                        "low": 40,
+                        "important": 70,
+                        "severe": 80,
+                    }
+
+                    for keyword, score in keyword_scores.items():
+                        if keyword in summary_text:
+                            base_score = max(base_score, score)
+
+                    if not vuln.fixed_in:
+                        base_score = max(base_score, 80)
+
+                    severity = classify_severity(base_score)
+                    severity_counts[severity] += 1
+                    highest_score = max(highest_score, base_score)
+
+                    recommendation = (
+                        "Update to one of: " + ", ".join(vuln.fixed_in)
+                        if vuln.fixed_in
+                        else "Monitor for fixes; no patched versions listed"
+                    )
+
                     vulnerabilities.append(
                         {
                             "id": vuln.id,
@@ -506,15 +690,13 @@ def create_server() -> FastMCP:
                             "withdrawn": (
                                 vuln.withdrawn.isoformat() if vuln.withdrawn else None
                             ),
-                            "severity": (
-                                "high"
-                                if any(
-                                    alias.startswith("CVE-") for alias in vuln.aliases
-                                )
-                                else "medium"
-                            ),
+                            "severity": severity,
+                            "severity_score": base_score,
+                            "recommendation": recommendation,
                         }
                     )
+
+                overall_severity = classify_severity(highest_score) if vulnerabilities else "none"
 
                 return {
                     "package_name": package_info.name,
@@ -522,9 +704,12 @@ def create_server() -> FastMCP:
                     "vulnerability_count": len(vulnerabilities),
                     "has_vulnerabilities": len(vulnerabilities) > 0,
                     "vulnerabilities": vulnerabilities,
+                    "severity_breakdown": dict(severity_counts),
+                    "overall_severity": overall_severity,
+                    "overall_severity_score": highest_score,
                     "security_status": "vulnerable" if vulnerabilities else "secure",
                     "recommendation": (
-                        "Update to a patched version"
+                        "Address the listed vulnerabilities"
                         if vulnerabilities
                         else "No known vulnerabilities"
                     ),
@@ -600,38 +785,84 @@ def create_server() -> FastMCP:
                 package_info = await client.get_package_info(package_name, version)
                 versions = await client.get_package_versions(package_name)
 
-                # Calculate health metrics
                 health_score = 100
-                health_notes = []
+                health_notes: List[str] = []
+                scoring_breakdown: Dict[str, Any] = {}
 
-                # Check for vulnerabilities
-                if package_info.vulnerabilities:
-                    health_score -= 30
+                # Vulnerability impact
+                vuln_count = len(package_info.vulnerabilities)
+                if vuln_count:
+                    penalty = min(40, vuln_count * 10)
+                    health_score -= penalty
                     health_notes.append(
-                        f"Has {len(package_info.vulnerabilities)} known vulnerabilities"
+                        f"Has {vuln_count} known vulnerabilities (-{penalty})"
                     )
+                    scoring_breakdown["vulnerabilities"] = -penalty
 
-                # Check if yanked
+                # Yanked release
                 if package_info.yanked:
-                    health_score -= 50
-                    health_notes.append("Version is yanked")
+                    health_score -= 40
+                    health_notes.append("Version is yanked (-40)")
+                    scoring_breakdown["yanked"] = -40
 
-                # Check version freshness
+                # Version type
                 version_type = classify_version_type(package_info.version)
                 if version_type == "pre-release":
                     health_score -= 10
-                    health_notes.append("Using pre-release version")
+                    health_notes.append("Using pre-release version (-10)")
+                    scoring_breakdown["pre_release"] = -10
 
-                # Check for basic metadata
+                # Metadata completeness
+                metadata_penalty = 0
                 if not package_info.description:
-                    health_score -= 5
-                    health_notes.append("Missing description")
-
+                    metadata_penalty += 5
+                    health_notes.append("Missing description (-5)")
                 if not package_info.home_page and not package_info.project_urls:
-                    health_score -= 5
-                    health_notes.append("Missing project URLs")
+                    metadata_penalty += 5
+                    health_notes.append("Missing project URLs (-5)")
+                if not package_info.license:
+                    metadata_penalty += 3
+                    health_notes.append("License information missing (-3)")
+                if metadata_penalty:
+                    health_score -= metadata_penalty
+                    scoring_breakdown["metadata"] = -metadata_penalty
 
-                # Determine health status
+                # Release cadence (approximate)
+                release_cadence = None
+                if versions:
+                    release_cadence = min(len(versions), 20)
+                    if release_cadence < 3:
+                        health_score -= 10
+                        health_notes.append("Limited release history (-10)")
+                        scoring_breakdown["release_history"] = -10
+                    else:
+                        health_score += 5
+                        scoring_breakdown["release_history"] = +5
+
+                # Freshness estimation
+                latest_release_age = None
+                if package_info.files:
+                    latest_file = max(package_info.files, key=lambda f: f.upload_time)
+                    upload_time = latest_file.upload_time
+                    if upload_time.tzinfo is None or upload_time.tzinfo.utcoffset(upload_time) is None:
+                        upload_time = upload_time.replace(tzinfo=timezone.utc)
+                    latest_release_age = datetime.now(timezone.utc) - upload_time
+                    days_since_release = latest_release_age.days
+                    if days_since_release > 365:
+                        health_score -= 20
+                        health_notes.append("Last release over a year ago (-20)")
+                        scoring_breakdown["freshness"] = -20
+                    elif days_since_release > 180:
+                        health_score -= 10
+                        health_notes.append("Last release over six months ago (-10)")
+                        scoring_breakdown["freshness"] = -10
+                    else:
+                        health_score += 5
+                        scoring_breakdown["freshness"] = +5
+
+                # Ensure score bounds
+                health_score = max(0, min(100, health_score))
+
                 if health_score >= 80:
                     health_status = "excellent"
                 elif health_score >= 60:
@@ -644,16 +875,19 @@ def create_server() -> FastMCP:
                 return {
                     "package_name": package_info.name,
                     "package_version": package_info.version,
-                    "health_score": max(0, health_score),
+                    "health_score": health_score,
                     "health_status": health_status,
                     "health_notes": health_notes,
+                    "scoring_breakdown": scoring_breakdown,
                     "total_versions": len(versions),
                     "is_latest": (
                         package_info.version == versions[0] if versions else False
                     ),
-                    "has_vulnerabilities": len(package_info.vulnerabilities) > 0,
+                    "has_vulnerabilities": bool(package_info.vulnerabilities),
                     "is_yanked": package_info.yanked,
                     "version_type": version_type,
+                    "release_cadence": release_cadence,
+                    "latest_release_age_days": latest_release_age.days if latest_release_age else None,
                 }
 
             except PackageNotFoundError as e:
@@ -672,6 +906,7 @@ def create_server() -> FastMCP:
             "cache_stats": stats,
             "cache_enabled": True,
             "cache_ttl_seconds": settings.cache_ttl,
+            "cache_hit_rate": stats.get("hit_rate"),
         }
 
     # Resources

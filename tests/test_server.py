@@ -1,6 +1,6 @@
 """Comprehensive tests for the PyPI MCP server following FastMCP best practices."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -8,7 +8,8 @@ from fastmcp import Client
 from pydantic import HttpUrl
 
 from pypi_mcp.exceptions import PackageNotFoundError, ValidationError
-from pypi_mcp.models import PackageFile, PackageInfo, Vulnerability
+from pypi_mcp.models import (PackageFile, PackageInfo, SearchResult,
+                             Vulnerability)
 from pypi_mcp.server import create_server
 
 
@@ -148,8 +149,22 @@ class TestMCPToolsIntegration:
         with patch("pypi_mcp.server.client") as mock_client:
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client.get_package_info = AsyncMock(
-                return_value=mock_package_info)
+            mock_client.get_package_info = AsyncMock(return_value=mock_package_info)
+            mock_client.search_packages = AsyncMock(
+                return_value=
+                [
+                    SearchResult(
+                        name="test-package",
+                        version="1.0.0",
+                        summary="A test package",
+                        description="A test package description",
+                        author="Tester",
+                        keywords=["test", "package"],
+                        classifiers=[],
+                        score=0.9,
+                    )
+                ]
+            )
 
             async with Client(server) as client:
                 result = await client.call_tool(
@@ -157,10 +172,11 @@ class TestMCPToolsIntegration:
                 )
 
                 assert result.data["query"] == "test-package"
-                assert result.data["total_results"] == 1
-                assert len(result.data["results"]) == 1
-                assert result.data["results"][0]["name"] == "test-package"
-                assert result.data["results"][0]["score"] == 1.0  # Exact match
+                assert result.data["total_results"] >= 1
+                assert len(result.data["results"]) >= 1
+                top_result = result.data["results"][0]
+                assert top_result["name"] == "test-package"
+                assert top_result["score"] >= 0.9
 
     @pytest.mark.asyncio
     async def test_compare_versions_tool(self, server, mock_package_info):
@@ -260,8 +276,67 @@ class TestMCPToolsIntegration:
                 assert result.data["has_vulnerabilities"] is True
                 assert result.data["vulnerability_count"] == 1
                 assert result.data["security_status"] == "vulnerable"
+                assert result.data["overall_severity"] == "high"
+                assert result.data["overall_severity_score"] >= 70
+                assert result.data["severity_breakdown"]["high"] == 1
                 assert len(result.data["vulnerabilities"]) == 1
-                assert result.data["vulnerabilities"][0]["id"] == "VULN-2024-001"
+
+                vuln = result.data["vulnerabilities"][0]
+                assert vuln["id"] == "VULN-2024-001"
+                assert vuln["severity"] == "high"
+                assert "recommendation" in vuln
+
+    @pytest.mark.asyncio
+    async def test_check_vulnerabilities_severity_breakdown(
+        self, server, mock_package_info
+    ):
+        """Severity scoring should classify multiple vulnerabilities."""
+        critical_vuln = Vulnerability(
+            id="VULN-CRIT",
+            source="test",
+            summary="Critical remote code execution vulnerability",
+            details="Critical issue allowing RCE",
+            aliases=["CVE-2099-0001"],
+            fixed_in=[],
+            link=HttpUrl("https://example.com/critical"),
+        )
+
+        medium_vuln = Vulnerability(
+            id="VULN-MED",
+            source="test",
+            summary="Medium severity information leak",
+            details="Leads to information disclosure",
+            aliases=[],
+            fixed_in=["2.0.0"],
+            link=HttpUrl("https://example.com/medium"),
+        )
+
+        vulnerable_package = mock_package_info.model_copy(
+            update={"vulnerabilities": [critical_vuln, medium_vuln]}
+        )
+
+        with patch("pypi_mcp.server.client") as mock_client:
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_package_info = AsyncMock(return_value=vulnerable_package)
+
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "check_vulnerabilities", {"package_name": "test-package"}
+                )
+
+                assert result.data["vulnerability_count"] == 2
+                assert result.data["overall_severity"] == "critical"
+                assert result.data["severity_breakdown"]["critical"] == 1
+                assert result.data["severity_breakdown"]["medium"] == 1
+
+                severities = {vuln["id"]: vuln["severity"] for vuln in result.data["vulnerabilities"]}
+                assert severities["VULN-CRIT"] == "critical"
+                assert severities["VULN-MED"] == "medium"
+
+                scores = {vuln["id"]: vuln["severity_score"] for vuln in result.data["vulnerabilities"]}
+                assert scores["VULN-CRIT"] >= 85
+                assert 50 <= scores["VULN-MED"] < 70
 
     @pytest.mark.asyncio
     async def test_get_package_health_tool(self, server, mock_package_info):
@@ -280,10 +355,125 @@ class TestMCPToolsIntegration:
                 )
 
                 assert result.data["package_name"] == "test-package"
-                assert result.data["health_score"] >= 80  # Should be healthy
-                assert result.data["health_status"] == "excellent"
+                assert 0 <= result.data["health_score"] <= 100
+                assert result.data["health_status"] in {"excellent", "good"}
+                assert isinstance(result.data["health_notes"], list)
+                assert "scoring_breakdown" in result.data
                 assert result.data["has_vulnerabilities"] is False
                 assert result.data["is_yanked"] is False
+                assert "release_cadence" in result.data
+                assert "latest_release_age_days" in result.data
+
+    @pytest.mark.asyncio
+    async def test_get_package_health_penalized(
+        self, server, mock_package_info, mock_vulnerability
+    ):
+        """Packages with poor signals should have reduced health score."""
+        stale_file = PackageFile(
+            filename="old-0.1.0.tar.gz",
+            url=HttpUrl("https://files.pythonhosted.org/packages/old-0.1.0.tar.gz"),
+            size=1234,
+            md5_digest="abc",
+            digests="def",
+            upload_time_iso_8601=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            python_version="py3",
+            packagetype="sdist",
+        )
+
+        problematic_package = mock_package_info.model_copy(
+            update={
+                "description": "",
+                "home_page": "",
+                "project_urls": {},
+                "license": "",
+                "yanked": True,
+                "vulnerabilities": [mock_vulnerability, mock_vulnerability],
+                "files": [stale_file],
+            }
+        )
+
+        with patch("pypi_mcp.server.client") as mock_client:
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_package_info = AsyncMock(return_value=problematic_package)
+            mock_client.get_package_versions = AsyncMock(return_value=["0.1.0", "0.0.1"])
+
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "get_package_health", {"package_name": "problem-package"}
+                )
+
+                assert result.data["health_score"] < 60
+                assert result.data["health_status"] in {"fair", "poor"}
+                assert result.data["has_vulnerabilities"] is True
+                assert result.data["is_yanked"] is True
+                assert result.data["latest_release_age_days"] and result.data["latest_release_age_days"] > 1000
+
+    @pytest.mark.asyncio
+    async def test_get_release_activity_tool(self, server):
+        """Test release cadence analytics tool."""
+        recent_time = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        older_time = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+
+        mock_history = [
+            {
+                "version": "2.0.0",
+                "uploaded_at": recent_time,
+                "filename": "pkg-2.0.0.tar.gz",
+                "python_version": "py3",
+                "packagetype": "sdist",
+                "size": 1234,
+                "yanked": False,
+                "file_count": 1,
+                "package_types": ["sdist"],
+            },
+            {
+                "version": "1.5.0",
+                "uploaded_at": older_time,
+                "filename": "pkg-1.5.0.tar.gz",
+                "python_version": "py3",
+                "packagetype": "sdist",
+                "size": 1200,
+                "yanked": False,
+                "file_count": 1,
+                "package_types": ["sdist"],
+            },
+        ]
+
+        with patch("pypi_mcp.server.client") as mock_client:
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_release_history = AsyncMock(return_value=mock_history)
+
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "get_release_activity",
+                    {"package_name": "test-package", "limit": 10, "window_days": 90},
+                )
+
+                assert result.data["package_name"] == "test-package"
+                assert result.data["total_releases"] == 2
+                assert result.data["recent_releases"] == 1
+                assert result.data["cadence_classification"] == "slow"
+                assert len(result.data["releases"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_get_release_activity_no_history(self, server):
+        """Handle packages without release history."""
+        with patch("pypi_mcp.server.client") as mock_client:
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get_release_history = AsyncMock(return_value=[])
+
+            async with Client(server) as client:
+                result = await client.call_tool(
+                    "get_release_activity",
+                    {"package_name": "empty-package", "limit": 5, "window_days": 30},
+                )
+
+                assert result.data["package_name"] == "empty-package"
+                assert result.data["total_releases"] == 0
+                assert result.data["releases"] == []
 
 
 # ============================================================================

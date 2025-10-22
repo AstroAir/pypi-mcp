@@ -147,10 +147,10 @@ class SearchResult(BaseModel):
     """Represents a package search result."""
 
     name: str
-    version: str
-    summary: str
-    description: str
-    author: str
-    keywords: List[str] = []
-    classifiers: List[str] = []
+    version: str = ""
+    summary: str = ""
+    description: str = ""
+    author: str = ""
+    keywords: List[str] = Field(default_factory=list)
+    classifiers: List[str] = Field(default_factory=list)
     score: float = 0.0  # Relevance score
